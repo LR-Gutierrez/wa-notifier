@@ -1,16 +1,24 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, LocalAuth } from 'whatsapp-web.js';
+import { existsSync, rmSync } from 'fs';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
   private readonly logger = new Logger(WhatsappService.name);
-  private client: Client;
+  private client!: Client;
   private isReady = false;
+  private currentQr: string | null = null;
+  private connectionStatus: 'initializing' | 'qr' | 'ready' | 'disconnected' | 'error' = 'initializing';
 
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
+    this.setupClient();
+    await this.client.initialize();
+  }
+
+  private setupClient() {
     const sessionPath = this.configService.get('WA_SESSION_PATH', './wa-session');
 
     this.client = new Client({
@@ -23,6 +31,8 @@ export class WhatsappService implements OnModuleInit {
 
     this.client.on('qr', (qr) => {
       this.isReady = false;
+      this.currentQr = qr;
+      this.connectionStatus = 'qr';
       this.logger.log('📱 Escanea el QR con WhatsApp:');
       const qrcode = require('qrcode-terminal');
       qrcode.generate(qr, { small: true });
@@ -30,32 +40,71 @@ export class WhatsappService implements OnModuleInit {
 
     this.client.on('ready', () => {
       this.isReady = true;
+      this.currentQr = null;
+      this.connectionStatus = 'ready';
       this.logger.log('✅ WhatsApp client is ready!');
     });
 
     this.client.on('disconnected', (reason) => {
       this.isReady = false;
+      this.connectionStatus = 'disconnected';
       this.logger.warn(`⚠️ WhatsApp disconnected: ${reason}`);
     });
 
     this.client.on('auth_failure', (msg) => {
       this.isReady = false;
+      this.connectionStatus = 'error';
       this.logger.error(`❌ Auth failure: ${msg}`);
     });
-
-    try {
-      await this.client.initialize();
-    } catch (error) {
-      this.logger.error('Failed to initialize WhatsApp client', error);
-    }
   }
 
-  getClient(): Client {
-    return this.client;
+  getQr(): string | null {
+    return this.currentQr;
   }
 
   getIsReady(): boolean {
     return this.isReady;
+  }
+
+  getStatus(): { ready: boolean; status: string } {
+    return { ready: this.isReady, status: this.connectionStatus };
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.client.destroy();
+    } catch {
+      // ignore
+    }
+
+    this.isReady = false;
+    this.currentQr = null;
+    this.connectionStatus = 'disconnected';
+
+    const sessionPath = this.configService.get('WA_SESSION_PATH', './wa-session');
+    if (existsSync(sessionPath)) {
+      rmSync(sessionPath, { recursive: true, force: true });
+    }
+
+    this.logger.log('🔓 Sesión de WhatsApp cerrada');
+  }
+
+  async restart(): Promise<void> {
+    try {
+      await this.client.destroy();
+    } catch {
+      // ignore
+    }
+
+    this.isReady = false;
+    this.currentQr = null;
+    this.connectionStatus = 'initializing';
+    this.setupClient();
+    await this.client.initialize();
+  }
+
+  getClient(): Client {
+    return this.client;
   }
 
   private calculateTypingDuration(text: string): number {
