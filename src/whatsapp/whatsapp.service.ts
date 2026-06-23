@@ -58,6 +58,21 @@ export class WhatsappService implements OnModuleInit {
     return this.isReady;
   }
 
+  private calculateTypingDuration(text: string): number {
+    const BASE_MIN = 1000;
+    const BASE_MAX = 2500;
+    const CHARS_PER_SEC_MIN = 6;
+    const CHARS_PER_SEC_MAX = 10;
+
+    const base = BASE_MIN + Math.random() * (BASE_MAX - BASE_MIN);
+    const cps = CHARS_PER_SEC_MIN + Math.random() * (CHARS_PER_SEC_MAX - CHARS_PER_SEC_MIN);
+    const typeTime = (text.length / cps) * 1000;
+
+    const duration = base + typeTime;
+    const variation = 0.85 + Math.random() * 0.3;
+    return duration * variation;
+  }
+
   async sendMessage(phone: string, message: string): Promise<boolean> {
     if (!this.isReady) {
       throw new Error('WhatsApp client is not ready. Scan the QR code first.');
@@ -66,6 +81,14 @@ export class WhatsappService implements OnModuleInit {
     const chatId = phone.includes('@c.us') ? phone : `${phone}@c.us`;
 
     try {
+      const chat = await this.client.getChatById(chatId);
+      await chat.sendStateTyping();
+
+      const typingDuration = this.calculateTypingDuration(message);
+      this.logger.log(`⏳ Typing for ${Math.round(typingDuration)}ms...`);
+
+      await new Promise((resolve) => setTimeout(resolve, typingDuration));
+
       await this.client.sendMessage(chatId, message);
       this.logger.log(`✅ Message sent to ${phone}`);
       return true;

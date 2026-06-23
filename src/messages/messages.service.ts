@@ -9,11 +9,11 @@ export class MessagesService {
   constructor(private readonly whatsappService: WhatsappService) {}
 
   async send(dto: SendMessageDto) {
-    const { phone, message, clientName } = dto;
+    const { phone, message, title } = dto;
 
     let formattedMessage = message;
-    if (clientName) {
-      formattedMessage = `Hola ${clientName},\n\n${message}`;
+    if (title) {
+      formattedMessage = `${title}\n\n${message}`;
     }
 
     try {
@@ -24,7 +24,7 @@ export class MessagesService {
         message: `Message sent to ${phone}`,
         data: {
           phone,
-          clientName: clientName || null,
+          title: title || null,
         },
       };
     } catch (error) {
@@ -35,7 +35,7 @@ export class MessagesService {
         message: error instanceof Error ? error.message : 'Failed to send message',
         data: {
           phone,
-          clientName: clientName || null,
+          title: title || null,
         },
       };
     }

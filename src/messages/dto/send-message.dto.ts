@@ -14,5 +14,5 @@ export class SendMessageDto {
 
   @IsString()
   @IsOptional()
-  clientName?: string;
+  title?: string;
 }
