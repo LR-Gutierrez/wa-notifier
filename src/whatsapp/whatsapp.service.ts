@@ -72,6 +72,12 @@ export class WhatsappService implements OnModuleInit {
 
   async logout(): Promise<void> {
     try {
+      await this.client.logout();
+    } catch {
+      // ignore
+    }
+
+    try {
       await this.client.destroy();
     } catch {
       // ignore
