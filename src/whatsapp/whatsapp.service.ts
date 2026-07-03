@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import { existsSync, rmSync } from 'fs';
+import { SignalRService } from './signalr.service';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
@@ -11,7 +12,10 @@ export class WhatsappService implements OnModuleInit {
   private currentQr: string | null = null;
   private connectionStatus: 'initializing' | 'qr' | 'ready' | 'disconnected' | 'error' = 'initializing';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly signalR: SignalRService,
+  ) {}
 
   async onModuleInit() {
     this.setupClient();
@@ -36,6 +40,8 @@ export class WhatsappService implements OnModuleInit {
       this.logger.log('📱 Escanea el QR con WhatsApp:');
       const qrcode = require('qrcode-terminal');
       qrcode.generate(qr, { small: true });
+      this.signalR.notifyQr(qr);
+      this.signalR.notifyStatus({ ready: false, status: 'qr' });
     });
 
     this.client.on('ready', () => {
@@ -43,18 +49,22 @@ export class WhatsappService implements OnModuleInit {
       this.currentQr = null;
       this.connectionStatus = 'ready';
       this.logger.log('✅ WhatsApp client is ready!');
+      this.signalR.notifyQr(null);
+      this.signalR.notifyStatus({ ready: true, status: 'ready' });
     });
 
     this.client.on('disconnected', (reason) => {
       this.isReady = false;
       this.connectionStatus = 'disconnected';
       this.logger.warn(`⚠️ WhatsApp disconnected: ${reason}`);
+      this.signalR.notifyStatus({ ready: false, status: 'disconnected' });
     });
 
     this.client.on('auth_failure', (msg) => {
       this.isReady = false;
       this.connectionStatus = 'error';
       this.logger.error(`❌ Auth failure: ${msg}`);
+      this.signalR.notifyStatus({ ready: false, status: 'error' });
     });
   }
 
@@ -128,8 +138,9 @@ export class WhatsappService implements OnModuleInit {
     return duration * variation;
   }
 
-  async sendMessage(phone: string, message: string): Promise<boolean> {
+  async sendMessage(phone: string, message: string, correlationId?: string): Promise<boolean> {
     if (!this.isReady) {
+      this.signalR.notifyDelivery(correlationId, false, 'WhatsApp client is not ready');
       throw new Error('WhatsApp client is not ready. Scan the QR code first.');
     }
 
@@ -146,9 +157,11 @@ export class WhatsappService implements OnModuleInit {
 
       await this.client.sendMessage(chatId, message);
       this.logger.log(`✅ Message sent to ${phone}`);
+      this.signalR.notifyDelivery(correlationId, true);
       return true;
     } catch (error) {
       this.logger.error(`❌ Failed to send message to ${phone}`, error);
+      this.signalR.notifyDelivery(correlationId, false, error instanceof Error ? error.message : 'Unknown error');
       throw error;
     }
   }

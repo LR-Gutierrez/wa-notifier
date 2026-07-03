@@ -15,4 +15,8 @@ export class SendMessageDto {
   @IsString()
   @IsOptional()
   title?: string;
+
+  @IsString()
+  @IsOptional()
+  correlationId?: string;
 }

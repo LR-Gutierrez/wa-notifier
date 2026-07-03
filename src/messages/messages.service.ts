@@ -9,7 +9,7 @@ export class MessagesService {
   constructor(private readonly whatsappService: WhatsappService) {}
 
   async send(dto: SendMessageDto) {
-    const { phone, message, title } = dto;
+    const { phone, message, title, correlationId } = dto;
 
     let formattedMessage = message;
     if (title) {
@@ -17,7 +17,7 @@ export class MessagesService {
     }
 
     try {
-      await this.whatsappService.sendMessage(phone, formattedMessage);
+      await this.whatsappService.sendMessage(phone, formattedMessage, correlationId);
 
       return {
         success: true,
@@ -25,6 +25,7 @@ export class MessagesService {
         data: {
           phone,
           title: title || null,
+          correlationId: correlationId || null,
         },
       };
     } catch (error) {
@@ -36,6 +37,7 @@ export class MessagesService {
         data: {
           phone,
           title: title || null,
+          correlationId: correlationId || null,
         },
       };
     }
