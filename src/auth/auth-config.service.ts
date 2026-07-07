@@ -18,6 +18,13 @@ export class AuthConfigService {
   }
 
   private load(): void {
+    const envApiKey = process.env.WA_NOTIFIER_API_KEY;
+    if (envApiKey) {
+      this.config = { apiKey: envApiKey };
+      this.logger.log('Using API key from WA_NOTIFIER_API_KEY env var');
+      return;
+    }
+
     if (!existsSync(this.configPath)) {
       const defaultKey = crypto.randomBytes(32).toString('hex');
       this.config = { apiKey: defaultKey };
