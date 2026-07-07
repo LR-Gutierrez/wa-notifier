@@ -19,7 +19,12 @@ export class WhatsappService implements OnModuleInit {
 
   async onModuleInit() {
     this.setupClient();
-    await this.client.initialize();
+    try {
+      await this.client.initialize();
+    } catch (err) {
+      this.logger.error('WhatsApp client initialization failed, server will keep running', err);
+      this.connectionStatus = 'error';
+    }
   }
 
   private setupClient() {
